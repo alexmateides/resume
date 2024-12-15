@@ -1,120 +1,46 @@
 name: Build and Deploy Resume
 
-# Trigger the workflow on pushes to the main branch
 on:
   push:
-    branches:
-      - main  # Change to your default branch if different
+    branches: [ main ]
+
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Check out the repository
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Install LaTeX packages
+        run: sudo apt-get update && sudo apt-get install -y texlive-latex-extra
+
+      - name: Build PDF
+        run: |
+          pdflatex -interaction=nonstopmode -halt-on-error resume.tex
+          # Run twice if necessary for references:
+          pdflatex -interaction=nonstopmode -halt-on-error resume.tex
+
+      # Commit resume.pdf back to the main branch
+      - name: Commit and push resume.pdf to main
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add resume.pdf
+          git commit -m "Update resume.pdf [skip ci]"
+          git push origin HEAD:main
+
+      # Prepare files for GitHub Pages deployment
+      - name: Prepare deployment files
+        run: |
+          mkdir public
+          cp resume.pdf public/
+          echo "resume.mateides.com" > public/CNAME
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          persist-credentials: false  # Disable automatic token injection
-          fetch-depth: 0  # Fetch all history for all branches and tags
-
-      # Step 2: Set up LaTeX environment
-      - name: Install LaTeX
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y texlive-latex-base texlive-latex-extra texlive-fonts-recommended
-
-      # Step 3: Compile LaTeX to PDF
-      - name: Compile LaTeX to PDF
-        run: |
-          pdflatex resume.tex
-          pdflatex resume.tex  # Run twice to ensure references are updated
-
-      # Step 4: Configure Git for committing to main branch
-      - name: Set up Git for Main Branch
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Step 5: Commit and Push resume.pdf to Main Branch
-      - name: Commit and Push PDF to Main Branch
-        run: |
-          # Check if resume.pdf has changed
-          if git diff --name-only | grep -q "resume.pdf"; then
-            git add resume.pdf
-            git commit -m "Update resume.pdf [skip ci]" || echo "No changes to commit"
-            git push origin main
-          else
-            echo "No changes detected in resume.pdf"
-          fi
-
-      # Step 6: Configure Git for gh-pages deployment
-      - name: Set up Git for gh-pages
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Step 7: Create or Checkout gh-pages Branch
-      - name: Create or Checkout gh-pages Branch
-        run: |
-          # Fetch all branches
-          git fetch origin
-
-          # Check if gh-pages branch exists
-          if git show-ref --verify --quiet refs/heads/gh-pages; then
-            echo "gh-pages branch exists. Checking out."
-            git checkout gh-pages
-          else
-            echo "gh-pages branch does not exist. Creating orphan gh-pages branch."
-            git checkout --orphan gh-pages
-            git rm -rf .  # Remove all files from the new orphan branch
-            # Optionally, add a README or other initial files
-            echo "# GitHub Pages for Resume" > README.md
-            git add README.md
-            git commit -m "Initialize gh-pages branch"
-            git push origin gh-pages
-            git checkout main  # Switch back to main branch for further steps
-          fi
-
-      # Step 8: Deploy resume.pdf to gh-pages Branch
-      - name: Deploy to gh-pages
-        run: |
-          # Checkout gh-pages branch
-          git checkout gh-pages
-
-          # Create a directory for the PDF if desired (optional)
-          # mkdir -p pdfs
-
-          # Copy the resume.pdf to the repository root (or desired directory)
-          cp ../resume.pdf ./
-          # If using a directory, uncomment the following line and adjust accordingly
-          # cp ../resume.pdf pdfs/
-
-          # Add CNAME if it doesn't exist
-          if [ ! -f CNAME ]; then
-            echo "resume.mateides.com" > CNAME
-          fi
-
-          # Add changes to git
-          git add resume.pdf CNAME  # Add 'pdfs/resume.pdf' if using a directory
-
-          # Commit changes if there are any
-          git commit -m "Deploy resume.pdf to GitHub Pages" || echo "No changes to commit"
-
-          # Push to gh-pages branch
-          git push origin gh-pages
-
-      # Step 9: Switch Back to Main Branch
-      - name: Switch Back to Main Branch
-        run: |
-          git checkout main
-
-    # Optional: Define environment variables or secrets if needed
-    env:
-      # GITHUB_TOKEN is automatically provided by GitHub Actions
-      # No need to define it unless you have custom tokens
-      # Example:
-      # CUSTOM_TOKEN: ${{ secrets.CUSTOM_TOKEN }}
-      # CNAME: resume.mateides.com
-      # You can also define other environment variables here
-      # For this workflow, no additional variables are necessary
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
