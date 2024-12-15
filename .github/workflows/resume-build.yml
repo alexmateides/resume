@@ -1,0 +1,64 @@
+name: Build Resume PDF
+
+# Trigger the workflow on push events to the main branch
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'resume.tex'
+      - '.github/workflows/resume-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up LaTeX environment
+      - name: Install LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-base texlive-latex-extra texlive-fonts-recommended
+
+      # Step 3: Compile resume.tex to resume.pdf
+      - name: Compile LaTeX to PDF
+        run: |
+          pdflatex resume.tex
+          # Run twice to ensure references are updated, if any
+          pdflatex resume.tex
+
+      # Step 3.1: Upload the PDF as an artifact
+      - name: Upload PDF Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: resume-pdf
+          path: resume.pdf
+
+      # Step 4: Github pages
+      - name: Setup GitHub Pages
+        uses: actions/checkout@v3
+        with:
+          ref: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: gh-pages
+
+      # Step 5: Copy resume.pdf to GitHub Pages Branch
+      - name: Copy PDF to GitHub Pages
+        run: |
+          mkdir -p gh-pages
+          cp resume.pdf gh-pages/
+          echo "resume.mateides.com" > gh-pages/CNAME
+
+      # Step 6: Commit and Push to gh-pages Branch
+      - name: Commit and Push
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add resume.pdf CNAME
+          git commit -m "Deploy resume.pdf to GitHub Pages"
+          git push origin gh-pages
